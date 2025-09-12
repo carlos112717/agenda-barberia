@@ -31,16 +31,27 @@ export function RegisterPage() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (formData.password !== formData.confirmarPassword) {
       alert('Las contraseñas no coinciden');
       return;
     }
-    console.log('Datos del nuevo empleado:', formData);
-    // Lógica para guardar en DB...
-    alert(`¡Bienvenido, ${formData.nombre}! Tu cuenta ha sido creada. Ahora puedes iniciar sesión.`);
-    navigate('/login');
+
+    try {
+      // LLAMADA AL BACKEND
+      const result = await window.electronAPI.invoke('register-user', formData);
+
+      if (result.success) {
+        alert(result.message);
+        navigate('/login');
+      } else {
+        alert(`Error: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error al invocar IPC de registro:', error);
+      alert('Ocurrió un error inesperado al registrar.');
+    }
   };
 
   return (

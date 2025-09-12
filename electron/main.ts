@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 function setupDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'barberia.db');
   const db = new Database(dbPath);
+  console.log('Verificando base de datos en:', dbPath);
 
   db.exec('PRAGMA foreign_keys = ON;');
 
@@ -49,29 +50,33 @@ function setupDatabase() {
       FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE
     );
   `);
-
-  console.log('Base de datos (V2) lista en:', dbPath);
+  console.log('Base de datos lista y configurada.');
 }
 
 // --- LÓGICA DE LAS VENTANAS ---
 function createWindows() {
-  const splash = new BrowserWindow({
-    width: 600,
-    height: 400,
-    transparent: true,
-    frame: false,
-    alwaysOnTop: true
-  });
-  splash.loadFile(path.join(__dirname, '../../splash.html')); // Ruta corregida para splash.html
-
+  // Ventana Principal (Login)
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
     webPreferences: {
+      // ESTA ES LA LÍNEA CLAVE QUE FALTABA
       preload: path.join(__dirname, 'preload.js')
     }
   });
+
+  // Ventana Splash
+  const splash = new BrowserWindow({
+    width: 600,
+    height: 400,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    parent: mainWindow // Asocia el splash a la ventana principal
+  });
+
+  splash.loadFile(path.join(app.getAppPath(), 'splash.html'));
 
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -79,14 +84,17 @@ function createWindows() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
-  
-  setTimeout(() => {
-    splash.close();
-    mainWindow.show();
-  }, 3000);
+
+  mainWindow.once('ready-to-show', () => {
+    setTimeout(() => {
+      splash.destroy();
+      mainWindow.show();
+    }, 2000); // 2 segundos
+  });
 }
 
 // --- MANEJADORES DE IPC ---
+// (El resto de manejadores para 'login-user' y 'register-user' se quedan igual que en la versión anterior)
 
 // Manejador para el LOGIN de usuarios
 ipcMain.handle('login-user', async (event, { email, password }) => {
@@ -103,7 +111,6 @@ ipcMain.handle('login-user', async (event, { email, password }) => {
       return { success: false, message: 'La contraseña es incorrecta.' };
     }
     
-    // Opcional: Podrías devolver datos del empleado si los necesitas en el frontend
     return { success: true, message: 'Inicio de sesión exitoso.' };
 
   } catch (error) {
@@ -111,7 +118,6 @@ ipcMain.handle('login-user', async (event, { email, password }) => {
     return { success: false, message: 'Ocurrió un error en el servidor.' };
   }
 });
-
 
 // Manejador para el REGISTRO de nuevos usuarios
 ipcMain.handle('register-user', async (event, userData) => {
@@ -156,7 +162,7 @@ ipcMain.handle('register-user', async (event, userData) => {
 
 // --- CICLO DE VIDA DE LA APP ---
 app.whenReady().then(() => {
-  setupDatabase(); // Ahora esta función existe
+  setupDatabase();
   createWindows();
 });
 

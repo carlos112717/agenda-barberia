@@ -2505,6 +2505,7 @@ const bcrypt = {
 function setupDatabase() {
   const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
   const db = new Database(dbPath);
+  console.log("Verificando base de datos en:", dbPath);
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec(`
     CREATE TABLE IF NOT EXISTS empleados (
@@ -2544,35 +2545,40 @@ function setupDatabase() {
       FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE
     );
   `);
-  console.log("Base de datos (V2) lista en:", dbPath);
+  console.log("Base de datos lista y configurada.");
 }
 function createWindows() {
-  const splash = new electron.BrowserWindow({
-    width: 600,
-    height: 400,
-    transparent: true,
-    frame: false,
-    alwaysOnTop: true
-  });
-  splash.loadFile(path.join(__dirname, "../../splash.html"));
   const mainWindow = new electron.BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
     webPreferences: {
+      // ESTA ES LA LÍNEA CLAVE QUE FALTABA
       preload: path.join(__dirname, "preload.js")
     }
   });
+  const splash = new electron.BrowserWindow({
+    width: 600,
+    height: 400,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    parent: mainWindow
+    // Asocia el splash a la ventana principal
+  });
+  splash.loadFile(path.join(electron.app.getAppPath(), "splash.html"));
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
-  setTimeout(() => {
-    splash.close();
-    mainWindow.show();
-  }, 3e3);
+  mainWindow.once("ready-to-show", () => {
+    setTimeout(() => {
+      splash.destroy();
+      mainWindow.show();
+    }, 2e3);
+  });
 }
 electron.ipcMain.handle("login-user", async (event, { email, password }) => {
   const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
