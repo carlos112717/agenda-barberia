@@ -1,111 +1,165 @@
-import { app, BrowserWindow } from 'electron';
-import { ipcMain } from 'electron';
-import Database from 'better-sqlite3';
+// electron/main.ts
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
+import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 
+// --- IMPLEMENTACIÓN DE setupDatabase ---
+function setupDatabase() {
+  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+  const db = new Database(dbPath);
+
+  db.exec('PRAGMA foreign_keys = ON;');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS empleados (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL,
+      apellidos TEXT NOT NULL,
+      foto_path TEXT,
+      tipo_documento TEXT,
+      numero_documento TEXT UNIQUE,
+      telefono TEXT,
+      email TEXT NOT NULL UNIQUE,
+      rol TEXT NOT NULL,
+      fecha_ingreso TEXT,
+      direccion TEXT,
+      ciudad TEXT,
+      provincia TEXT,
+      pais TEXT,
+      nacionalidad TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      empleado_id INTEGER NOT NULL,
+      FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS citas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre_cliente TEXT NOT NULL,
+      telefono_cliente TEXT,
+      fecha TEXT NOT NULL,
+      hora TEXT NOT NULL,
+      servicio TEXT,
+      empleado_id INTEGER NOT NULL,
+      FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE
+    );
+  `);
+
+  console.log('Base de datos (V2) lista en:', dbPath);
+}
+
+// --- LÓGICA DE LAS VENTANAS ---
 function createWindows() {
-  // Ventana Splash
   const splash = new BrowserWindow({
     width: 600,
     height: 400,
     transparent: true,
-    frame: false, // Sin bordes
+    frame: false,
     alwaysOnTop: true
   });
-  splash.loadFile('splash.html');
+  splash.loadFile(path.join(__dirname, '../../splash.html')); // Ruta corregida para splash.html
 
-  // Ventana Principal (Login) - la creamos oculta al principio
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    show: false, // Inicia oculta
-    // ... webPreferences
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js')
+    }
   });
-  // Carga la URL de Vite como antes
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-  if (!devServerUrl) {
-    throw new Error('VITE_DEV_SERVER_URL is not defined');
-  }
-  mainWindow.loadURL(devServerUrl);
 
-  // Lógica de tiempo
+  if (process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
+  
   setTimeout(() => {
     splash.close();
-    mainWindow.show(); // Muestra la ventana principal después de 3 segundos
-  }, 3000); // 3 segundos
+    mainWindow.show();
+  }, 3000);
 }
 
-// Manejador para el registro de nuevos usuarios
+// --- MANEJADORES DE IPC ---
+
+// Manejador para el LOGIN de usuarios
+ipcMain.handle('login-user', async (event, { email, password }) => {
+  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+  const db = new Database(dbPath);
+  try {
+    const user = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(email);
+    if (!user) {
+      return { success: false, message: 'El correo electrónico no está registrado.' };
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      return { success: false, message: 'La contraseña es incorrecta.' };
+    }
+    
+    // Opcional: Podrías devolver datos del empleado si los necesitas en el frontend
+    return { success: true, message: 'Inicio de sesión exitoso.' };
+
+  } catch (error) {
+    console.error('Error en el inicio de sesión:', error);
+    return { success: false, message: 'Ocurrió un error en el servidor.' };
+  }
+});
+
+
+// Manejador para el REGISTRO de nuevos usuarios
 ipcMain.handle('register-user', async (event, userData) => {
   const dbPath = path.join(app.getPath('userData'), 'barberia.db');
   const db = new Database(dbPath);
-  db.pragma('foreign_keys = ON;'); // Buena práctica activar claves foráneas
+  db.pragma('foreign_keys = ON;');
 
   try {
-    // 1. Hashear la contraseña
-    const saltRounds = 10; // Número de rondas de hashing (estándar)
+    const saltRounds = 10;
     const passwordHash = await bcrypt.hash(userData.password, saltRounds);
 
-    // 2. Usar una transacción para asegurar la integridad de los datos
-    // Si una de las inserciones falla, la otra se revierte.
     const transaction = db.transaction(() => {
-      // 3. Insertar en la tabla 'empleados'
       const empleadoStmt = db.prepare(
         `INSERT INTO empleados (nombre, apellidos, tipo_documento, numero_documento, telefono, email, rol, fecha_ingreso, direccion, ciudad, provincia, pais, nacionalidad)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const empleadoInfo = empleadoStmt.run(
-        userData.nombre,
-        userData.apellidos,
-        userData.tipoDocumento,
-        userData.numeroDocumento,
-        userData.telefono,
-        userData.email,
-        userData.rol === 'Otro' ? userData.otroRol : userData.rol, // Usa el rol personalizado si existe
-        userData.fechaIngreso,
-        userData.direccion,
-        userData.ciudad,
-        userData.provincia,
-        userData.pais,
-        userData.nacionalidad
+        userData.nombre, userData.apellidos, userData.tipoDocumento,
+        userData.numeroDocumento, userData.telefono, userData.email,
+        userData.rol === 'Otro' ? userData.otroRol : userData.rol,
+        userData.fechaIngreso, userData.direccion, userData.ciudad,
+        userData.provincia, userData.pais, userData.nacionalidad
       );
 
       const nuevoEmpleadoId = empleadoInfo.lastInsertRowid;
-
-      // 4. Insertar en la tabla 'usuarios'
       const usuarioStmt = db.prepare(
         'INSERT INTO usuarios (email, password_hash, empleado_id) VALUES (?, ?, ?)'
       );
       usuarioStmt.run(userData.email, passwordHash, nuevoEmpleadoId);
     });
 
-    // Ejecutar la transacción
     transaction();
-
     return { success: true, message: 'Empleado registrado con éxito.' };
-
   } catch (error) {
     console.error('Error en el registro:', error);
-    // Manejar errores comunes como email duplicado
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      (error as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE'
-    ) {
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return { success: false, message: 'El correo electrónico o número de documento ya está registrado.' };
     }
     return { success: false, message: 'Ocurrió un error al registrar el empleado.' };
   }
 });
 
-
+// --- CICLO DE VIDA DE LA APP ---
 app.whenReady().then(() => {
-  setupDatabase(); // Nuestra función de DB
-  createWindows(); // Nuestra nueva función para crear las ventanas
+  setupDatabase(); // Ahora esta función existe
+  createWindows();
 });
 
-function setupDatabase() {
-  throw new Error('Function not implemented.');
-}
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});

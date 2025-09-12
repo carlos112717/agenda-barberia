@@ -1,15 +1,15 @@
 "use strict";
 const electron = require("electron");
+const path = require("path");
 const require$$0 = require("fs");
-const require$$1 = require("path");
 const require$$2 = require("util");
 const nodeCrypto = require("crypto");
 function getDefaultExportFromCjs(x) {
   return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
 }
 var lib = { exports: {} };
-function commonjsRequire(path) {
-  throw new Error('Could not dynamically require "' + path + '". Please configure the dynamicRequireTargets or/and ignoreDynamicRequires option of @rollup/plugin-commonjs appropriately for this require call to work.');
+function commonjsRequire(path2) {
+  throw new Error('Could not dynamically require "' + path2 + '". Please configure the dynamicRequireTargets or/and ignoreDynamicRequires option of @rollup/plugin-commonjs appropriately for this require call to work.');
 }
 var util = {};
 var hasRequiredUtil;
@@ -58,7 +58,7 @@ var hasRequiredFileUriToPath;
 function requireFileUriToPath() {
   if (hasRequiredFileUriToPath) return fileUriToPath_1;
   hasRequiredFileUriToPath = 1;
-  var sep = require$$1.sep || "/";
+  var sep = path.sep || "/";
   fileUriToPath_1 = fileUriToPath;
   function fileUriToPath(uri) {
     if ("string" != typeof uri || uri.length <= 7 || "file://" != uri.substring(0, 7)) {
@@ -67,20 +67,20 @@ function requireFileUriToPath() {
     var rest = decodeURI(uri.substring(7));
     var firstSlash = rest.indexOf("/");
     var host = rest.substring(0, firstSlash);
-    var path = rest.substring(firstSlash + 1);
+    var path2 = rest.substring(firstSlash + 1);
     if ("localhost" == host) host = "";
     if (host) {
       host = sep + sep + host;
     }
-    path = path.replace(/^(.+)\|/, "$1:");
+    path2 = path2.replace(/^(.+)\|/, "$1:");
     if (sep == "\\") {
-      path = path.replace(/\//g, "\\");
+      path2 = path2.replace(/\//g, "\\");
     }
-    if (/^.+\:/.test(path)) ;
+    if (/^.+\:/.test(path2)) ;
     else {
-      path = sep + path;
+      path2 = sep + path2;
     }
-    return host + path;
+    return host + path2;
   }
   return fileUriToPath_1;
 }
@@ -89,14 +89,14 @@ function requireBindings() {
   if (hasRequiredBindings) return bindings.exports;
   hasRequiredBindings = 1;
   (function(module, exports) {
-    var fs = require$$0, path = require$$1, fileURLToPath = requireFileUriToPath(), join = path.join, dirname = path.dirname, exists = fs.accessSync && function(path2) {
+    var fs = require$$0, path$1 = path, fileURLToPath = requireFileUriToPath(), join = path$1.join, dirname = path$1.dirname, exists = fs.accessSync && function(path2) {
       try {
         fs.accessSync(path2);
       } catch (e) {
         return false;
       }
       return true;
-    } || fs.existsSync || path.existsSync, defaults = {
+    } || fs.existsSync || path$1.existsSync, defaults = {
       arrow: process.env.NODE_BINDINGS_ARROW || " → ",
       compiled: process.env.NODE_BINDINGS_COMPILED_DIR || "compiled",
       platform: process.platform,
@@ -140,7 +140,7 @@ function requireBindings() {
       if (!opts.module_root) {
         opts.module_root = exports.getRoot(exports.getFileName());
       }
-      if (path.extname(opts.bindings) != ".node") {
+      if (path$1.extname(opts.bindings) != ".node") {
         opts.bindings += ".node";
       }
       var requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : commonjsRequire;
@@ -380,7 +380,7 @@ function requireBackup() {
   if (hasRequiredBackup) return backup;
   hasRequiredBackup = 1;
   const fs = require$$0;
-  const path = require$$1;
+  const path$1 = path;
   const { promisify } = require$$2;
   const { cppdb } = requireUtil();
   const fsAccess = promisify(fs.access);
@@ -396,7 +396,7 @@ function requireBackup() {
     if (typeof attachedName !== "string") throw new TypeError('Expected the "attached" option to be a string');
     if (!attachedName) throw new TypeError('The "attached" option cannot be an empty string');
     if (handler != null && typeof handler !== "function") throw new TypeError('Expected the "progress" option to be a function');
-    await fsAccess(path.dirname(filename)).catch(() => {
+    await fsAccess(path$1.dirname(filename)).catch(() => {
       throw new TypeError("Cannot save backup because the directory does not exist");
     });
     const isNewFile = await fsAccess(filename).then(() => false, () => true);
@@ -702,7 +702,7 @@ function requireDatabase() {
   if (hasRequiredDatabase) return database;
   hasRequiredDatabase = 1;
   const fs = require$$0;
-  const path = require$$1;
+  const path$1 = path;
   const util2 = requireUtil();
   const SqliteError = requireSqliteError();
   let DEFAULT_ADDON;
@@ -738,7 +738,7 @@ function requireDatabase() {
       addon = DEFAULT_ADDON || (DEFAULT_ADDON = requireBindings()("better_sqlite3.node"));
     } else if (typeof nativeBinding === "string") {
       const requireFunc = typeof __non_webpack_require__ === "function" ? __non_webpack_require__ : commonjsRequire;
-      addon = requireFunc(path.resolve(nativeBinding).replace(/(\.node)?$/, ".node"));
+      addon = requireFunc(path$1.resolve(nativeBinding).replace(/(\.node)?$/, ".node"));
     } else {
       addon = nativeBinding;
     }
@@ -746,7 +746,7 @@ function requireDatabase() {
       addon.setErrorConstructor(SqliteError);
       addon.isInitialized = true;
     }
-    if (!anonymous && !fs.existsSync(path.dirname(filename))) {
+    if (!anonymous && !fs.existsSync(path$1.dirname(filename))) {
       throw new TypeError("Cannot open database because the directory does not exist");
     }
     Object.defineProperties(this, {
@@ -2502,35 +2502,98 @@ const bcrypt = {
   encodeBase64,
   decodeBase64
 };
+function setupDatabase() {
+  const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
+  const db = new Database(dbPath);
+  db.exec("PRAGMA foreign_keys = ON;");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS empleados (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL,
+      apellidos TEXT NOT NULL,
+      foto_path TEXT,
+      tipo_documento TEXT,
+      numero_documento TEXT UNIQUE,
+      telefono TEXT,
+      email TEXT NOT NULL UNIQUE,
+      rol TEXT NOT NULL,
+      fecha_ingreso TEXT,
+      direccion TEXT,
+      ciudad TEXT,
+      provincia TEXT,
+      pais TEXT,
+      nacionalidad TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      empleado_id INTEGER NOT NULL,
+      FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS citas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre_cliente TEXT NOT NULL,
+      telefono_cliente TEXT,
+      fecha TEXT NOT NULL,
+      hora TEXT NOT NULL,
+      servicio TEXT,
+      empleado_id INTEGER NOT NULL,
+      FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE
+    );
+  `);
+  console.log("Base de datos (V2) lista en:", dbPath);
+}
 function createWindows() {
   const splash = new electron.BrowserWindow({
     width: 600,
     height: 400,
     transparent: true,
     frame: false,
-    // Sin bordes
     alwaysOnTop: true
   });
-  splash.loadFile("splash.html");
+  splash.loadFile(path.join(__dirname, "../../splash.html"));
   const mainWindow = new electron.BrowserWindow({
     width: 1200,
     height: 800,
-    show: false
-    // Inicia oculta
-    // ... webPreferences
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js")
+    }
   });
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-  if (!devServerUrl) {
-    throw new Error("VITE_DEV_SERVER_URL is not defined");
+  if (process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
-  mainWindow.loadURL(devServerUrl);
   setTimeout(() => {
     splash.close();
     mainWindow.show();
   }, 3e3);
 }
+electron.ipcMain.handle("login-user", async (event, { email, password }) => {
+  const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
+  const db = new Database(dbPath);
+  try {
+    const user = db.prepare("SELECT * FROM usuarios WHERE email = ?").get(email);
+    if (!user) {
+      return { success: false, message: "El correo electrónico no está registrado." };
+    }
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      return { success: false, message: "La contraseña es incorrecta." };
+    }
+    return { success: true, message: "Inicio de sesión exitoso." };
+  } catch (error) {
+    console.error("Error en el inicio de sesión:", error);
+    return { success: false, message: "Ocurrió un error en el servidor." };
+  }
+});
 electron.ipcMain.handle("register-user", async (event, userData) => {
-  const dbPath = require$$1.join(electron.app.getPath("userData"), "barberia.db");
+  const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
   const db = new Database(dbPath);
   db.pragma("foreign_keys = ON;");
   try {
@@ -2549,7 +2612,6 @@ electron.ipcMain.handle("register-user", async (event, userData) => {
         userData.telefono,
         userData.email,
         userData.rol === "Otro" ? userData.otroRol : userData.rol,
-        // Usa el rol personalizado si existe
         userData.fechaIngreso,
         userData.direccion,
         userData.ciudad,
@@ -2567,7 +2629,7 @@ electron.ipcMain.handle("register-user", async (event, userData) => {
     return { success: true, message: "Empleado registrado con éxito." };
   } catch (error) {
     console.error("Error en el registro:", error);
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
       return { success: false, message: "El correo electrónico o número de documento ya está registrado." };
     }
     return { success: false, message: "Ocurrió un error al registrar el empleado." };
@@ -2577,6 +2639,6 @@ electron.app.whenReady().then(() => {
   setupDatabase();
   createWindows();
 });
-function setupDatabase() {
-  throw new Error("Function not implemented.");
-}
+electron.app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") electron.app.quit();
+});

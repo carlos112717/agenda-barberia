@@ -5,28 +5,43 @@ import { Link, useNavigate } from 'react-router-dom';
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null); // Estado para manejar errores
   const navigate = useNavigate();
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); // Evita que la página se recargue
-    console.log('Intentando iniciar sesión con:', { email, password });
-    // Aquí irá la lógica para verificar las credenciales
-    
-    // Si el login es exitoso, redirigimos al dashboard
-    // Por ahora, lo haremos directamente al hacer clic
-    navigate('/dashboard');
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null); // Limpia errores previos
+
+    try {
+      const result = await window.electronAPI.invoke('login-user', { email, password });
+
+      if (result.success) {
+        navigate('/dashboard'); // Redirige si el login es exitoso
+      } else {
+        setError(result.message); // Muestra el mensaje de error del backend
+      }
+    } catch (err) {
+      console.error('Error al invocar IPC de login:', err);
+      setError('Ocurrió un error inesperado. Inténtalo de nuevo.');
+    }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
         <div className="text-center">
-          {/* Puedes poner un logo aquí */}
           <h2 className="text-3xl font-bold text-gray-800">Iniciar Sesión</h2>
           <p className="mt-2 text-sm text-gray-600">Bienvenido a Barbería App</p>
         </div>
         
         <form className="space-y-6" onSubmit={handleSubmit}>
+          {/* Muestra el mensaje de error si existe */}
+          {error && (
+            <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-400 rounded-md">
+              {error}
+            </div>
+          )}
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Correo Electrónico
