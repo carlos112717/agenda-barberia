@@ -24,5 +24,11 @@ export default defineConfig(() => {
       ]),
       renderer(),
     ],
+    build: {
+      rollupOptions: {
+        // Le decimos a Vite que no intente incluir este paquete en el build
+        external: ['better-sqlite3']
+      }
+    }
   }
 })

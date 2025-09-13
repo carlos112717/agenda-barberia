@@ -2519,6 +2519,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
+      // ESTA ES LA CONEXIÓN CRÍTICA QUE ESTABLECE EL PUENTE
       preload: path.join(__dirname, "preload.js")
     }
   });
@@ -2533,13 +2534,9 @@ electron.ipcMain.handle("login-user", async (event, { email, password }) => {
   const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
   const db = new Database(dbPath);
   const user = db.prepare("SELECT * FROM usuarios WHERE email = ?").get(email);
-  if (!user) {
-    return { success: false, message: "El correo electrónico no está registrado." };
-  }
+  if (!user) return { success: false, message: "El correo electrónico no está registrado." };
   const passwordMatch = await bcrypt.compare(password, user.password_hash);
-  if (!passwordMatch) {
-    return { success: false, message: "La contraseña es incorrecta." };
-  }
+  if (!passwordMatch) return { success: false, message: "La contraseña es incorrecta." };
   return { success: true, message: "Inicio de sesión exitoso." };
 });
 electron.ipcMain.handle("register-user", async (event, userData) => {
@@ -2556,7 +2553,7 @@ electron.ipcMain.handle("register-user", async (event, userData) => {
     transaction2();
     return { success: true, message: "Empleado registrado con éxito." };
   } catch (error) {
-    if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
+    if (error instanceof Error && "code" in error && error.code === "SQLITE_CONSTRAINT_UNIQUE") {
       return { success: false, message: "El correo electrónico o número de documento ya está registrado." };
     }
     return { success: false, message: "Ocurrió un error al registrar." };

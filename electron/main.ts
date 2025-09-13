@@ -4,10 +4,20 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 
+// Definimos un tipo para el usuario que viene de la base de datos
+interface User {
+  id: number;
+  email: string;
+  password_hash: string;
+  empleado_id: number;
+}
+
+// ---- CONFIGURACIÓN DE LA BASE DE DATOS ----
 function setupDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'barberia.db');
   const db = new Database(dbPath);
   console.log('✅ Base de datos abierta en:', dbPath);
+
   db.pragma('foreign_keys = ON;');
   db.exec(`
     CREATE TABLE IF NOT EXISTS empleados ( id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, apellidos TEXT NOT NULL, foto_path TEXT, tipo_documento TEXT, numero_documento TEXT UNIQUE, telefono TEXT, email TEXT NOT NULL UNIQUE, rol TEXT NOT NULL, fecha_ingreso TEXT, direccion TEXT, ciudad TEXT, provincia TEXT, pais TEXT, nacionalidad TEXT );
@@ -17,33 +27,36 @@ function setupDatabase() {
   console.log('✅ Tablas verificadas/creadas.');
 }
 
+// ---- CREACIÓN DE LA VENTANA PRINCIPAL ----
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200, height: 800,
     webPreferences: {
+      // ESTA ES LA CONEXIÓN CRÍTICA QUE ESTABLECE EL PUENTE
       preload: path.join(__dirname, 'preload.js')
     }
   });
 
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-    mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools(); // Abrimos las herramientas para ver errores
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 }
 
+// ---- MANEJADORES DE IPC (LOGIN Y REGISTRO) ----
+
 ipcMain.handle('login-user', async (event, { email, password }) => {
   const dbPath = path.join(app.getPath('userData'), 'barberia.db');
   const db = new Database(dbPath);
-  const user = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(email);
-  if (!user) {
-    return { success: false, message: 'El correo electrónico no está registrado.' };
-  }
+  const user = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(email) as User | undefined;
+  
+  if (!user) return { success: false, message: 'El correo electrónico no está registrado.' };
+  
   const passwordMatch = await bcrypt.compare(password, user.password_hash);
-  if (!passwordMatch) {
-    return { success: false, message: 'La contraseña es incorrecta.' };
-  }
+  if (!passwordMatch) return { success: false, message: 'La contraseña es incorrecta.' };
+  
   return { success: true, message: 'Inicio de sesión exitoso.' };
 });
 
@@ -61,13 +74,14 @@ ipcMain.handle('register-user', async (event, userData) => {
     transaction();
     return { success: true, message: 'Empleado registrado con éxito.' };
   } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (error instanceof Error && 'code' in error && (error as any).code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return { success: false, message: 'El correo electrónico o número de documento ya está registrado.' };
     }
     return { success: false, message: 'Ocurrió un error al registrar.' };
   }
 });
 
+// ---- CICLO DE VIDA DE LA APP ----
 app.whenReady().then(() => {
   setupDatabase();
   createWindow();
