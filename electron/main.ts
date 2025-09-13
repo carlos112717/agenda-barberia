@@ -14,17 +14,21 @@ interface User {
 
 // ---- CONFIGURACIÓN DE LA BASE DE DATOS ----
 function setupDatabase() {
-  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
-  const db = new Database(dbPath);
-  console.log('✅ Base de datos abierta en:', dbPath);
+  try {
+    const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+    const db = new Database(dbPath, { verbose: console.log }); // Agregamos verbose para ver las consultas en la consola
+    console.log('✅ Base de datos abierta en:', dbPath);
 
-  db.pragma('foreign_keys = ON;');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS empleados ( id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, apellidos TEXT NOT NULL, foto_path TEXT, tipo_documento TEXT, numero_documento TEXT UNIQUE, telefono TEXT, email TEXT NOT NULL UNIQUE, rol TEXT NOT NULL, fecha_ingreso TEXT, direccion TEXT, ciudad TEXT, provincia TEXT, pais TEXT, nacionalidad TEXT );
-    CREATE TABLE IF NOT EXISTS usuarios ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, empleado_id INTEGER NOT NULL, FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE );
-    CREATE TABLE IF NOT EXISTS citas ( id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_cliente TEXT NOT NULL, telefono_cliente TEXT, fecha TEXT NOT NULL, hora TEXT NOT NULL, servicio TEXT, empleado_id INTEGER NOT NULL, FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE );
-  `);
-  console.log('✅ Tablas verificadas/creadas.');
+    db.pragma('foreign_keys = ON;');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS empleados ( id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, apellidos TEXT NOT NULL, foto_path TEXT, tipo_documento TEXT, numero_documento TEXT UNIQUE, telefono TEXT, email TEXT NOT NULL UNIQUE, rol TEXT NOT NULL, fecha_ingreso TEXT, direccion TEXT, ciudad TEXT, provincia TEXT, pais TEXT, nacionalidad TEXT );
+      CREATE TABLE IF NOT EXISTS usuarios ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, empleado_id INTEGER NOT NULL, FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE );
+      CREATE TABLE IF NOT EXISTS citas ( id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_cliente TEXT NOT NULL, telefono_cliente TEXT, fecha TEXT NOT NULL, hora TEXT NOT NULL, servicio TEXT, empleado_id INTEGER NOT NULL, FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE );
+    `);
+    console.log('✅ Tablas verificadas/creadas.');
+  } catch (error) {
+    console.error('❌ Error al configurar la base de datos:', error);
+  }
 }
 
 // ---- CREACIÓN DE LA VENTANA PRINCIPAL ----
@@ -48,22 +52,31 @@ function createWindow() {
 // ---- MANEJADORES DE IPC (LOGIN Y REGISTRO) ----
 
 ipcMain.handle('login-user', async (event, { email, password }) => {
-  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
-  const db = new Database(dbPath);
-  const user = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(email) as User | undefined;
-  
-  if (!user) return { success: false, message: 'El correo electrónico no está registrado.' };
-  
-  const passwordMatch = await bcrypt.compare(password, user.password_hash);
-  if (!passwordMatch) return { success: false, message: 'La contraseña es incorrecta.' };
-  
-  return { success: true, message: 'Inicio de sesión exitoso.' };
+  try {
+    const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+    const db = new Database(dbPath);
+    const user = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(email) as User | undefined;
+
+    if (!user) {
+      return { success: false, message: 'El correo electrónico no está registrado.' };
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      return { success: false, message: 'La contraseña es incorrecta.' };
+    }
+
+    return { success: true, message: 'Inicio de sesión exitoso.' };
+  } catch (error) {
+    console.error('❌ Error en el login:', error);
+    return { success: false, message: 'Ocurrió un error inesperado durante el inicio de sesión.' };
+  }
 });
 
 ipcMain.handle('register-user', async (event, userData) => {
-  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
-  const db = new Database(dbPath);
   try {
+    const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+    const db = new Database(dbPath);
     const passwordHash = await bcrypt.hash(userData.password, 10);
     const transaction = db.transaction(() => {
       const empleadoStmt = db.prepare(`INSERT INTO empleados (nombre, apellidos, tipo_documento, numero_documento, telefono, email, rol, fecha_ingreso, direccion, ciudad, provincia, pais, nacionalidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
@@ -74,12 +87,14 @@ ipcMain.handle('register-user', async (event, userData) => {
     transaction();
     return { success: true, message: 'Empleado registrado con éxito.' };
   } catch (error) {
+    console.error('❌ Error en el registro:', error);
     if (error instanceof Error && 'code' in error && (error as any).code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return { success: false, message: 'El correo electrónico o número de documento ya está registrado.' };
     }
-    return { success: false, message: 'Ocurrió un error al registrar.' };
+    return { success: false, message: `Ocurrió un error al registrar: ${(error as Error).message}` };
   }
 });
+
 
 // ---- CICLO DE VIDA DE LA APP ----
 app.whenReady().then(() => {

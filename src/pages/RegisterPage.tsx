@@ -22,6 +22,7 @@ export function RegisterPage() {
     password: '',
     confirmarPassword: '',
   });
+  const [error, setError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -33,8 +34,9 @@ export function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError(null);
     if (formData.password !== formData.confirmarPassword) {
-      alert('Las contraseñas no coinciden');
+      setError('Las contraseñas no coinciden');
       return;
     }
 
@@ -46,11 +48,11 @@ export function RegisterPage() {
         alert(result.message);
         navigate('/login');
       } else {
-        alert(`Error: ${result.message}`);
+        setError(result.message);
       }
     } catch (error) {
       console.error('Error al invocar IPC de registro:', error);
-      alert('Ocurrió un error inesperado al registrar.');
+      setError('Ocurrió un error inesperado al registrar.');
     }
   };
 
@@ -61,6 +63,12 @@ export function RegisterPage() {
           <h2 className="text-3xl font-bold text-gray-800">Crear Cuenta de Empleado</h2>
           <p className="mt-2 text-sm text-gray-600">Completa el formulario para registrar un nuevo usuario.</p>
         </div>
+
+        {error && (
+          <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-400 rounded-md">
+            {error}
+          </div>
+        )}
 
         <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={handleSubmit}>
           {/* Columna Izquierda */}

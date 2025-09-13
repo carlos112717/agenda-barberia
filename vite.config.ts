@@ -13,7 +13,17 @@ export default defineConfig(() => {
       react(),
       electron([
         {
+          // Main-Process entry file of the Electron App.
           entry: 'electron/main.ts',
+          // ⬇️ HERE IS THE FIX
+          vite: {
+            build: {
+              rollupOptions: {
+                // Le decimos a Vite que no intente incluir este paquete en el build del main process.
+                external: ['better-sqlite3']
+              }
+            }
+          }
         },
         {
           entry: 'electron/preload.ts',
@@ -24,11 +34,6 @@ export default defineConfig(() => {
       ]),
       renderer(),
     ],
-    build: {
-      rollupOptions: {
-        // Le decimos a Vite que no intente incluir este paquete en el build
-        external: ['better-sqlite3']
-      }
-    }
+    // ⬆️ REMOVE THE `build` CONFIGURATION FROM HERE
   }
 })
