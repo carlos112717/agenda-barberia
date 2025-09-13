@@ -28,7 +28,7 @@ export function LoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+      <div className="w-full max-w-md p-6 md:p-8 space-y-6 bg-white rounded-lg shadow-md">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-gray-800">Iniciar Sesión</h2>
           <p className="mt-2 text-sm text-gray-600">Bienvenido a Barbería App</p>

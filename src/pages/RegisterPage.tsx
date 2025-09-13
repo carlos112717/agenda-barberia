@@ -58,7 +58,7 @@ export function RegisterPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-2xl p-8 my-8 space-y-6 bg-white rounded-lg shadow-md">
+      <div className="w-full max-w-md p-6 md:p-8 space-y-6 bg-white rounded-lg shadow-md">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-gray-800">Crear Cuenta de Empleado</h2>
           <p className="mt-2 text-sm text-gray-600">Completa el formulario para registrar un nuevo usuario.</p>
