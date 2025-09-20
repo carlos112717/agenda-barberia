@@ -1756,9 +1756,9 @@ function createWindow() {
   }
 }
 electron.ipcMain.handle("login-user", async (event, { email, password }) => {
+  const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
+  const db = new Database(dbPath);
   try {
-    const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
-    const db = new Database(dbPath);
     const user = db.prepare("SELECT * FROM usuarios WHERE email = ?").get(email);
     if (!user) {
       return { success: false, message: "El correo electrónico no está registrado." };
@@ -1767,7 +1767,8 @@ electron.ipcMain.handle("login-user", async (event, { email, password }) => {
     if (!passwordMatch) {
       return { success: false, message: "La contraseña es incorrecta." };
     }
-    return { success: true, message: "Inicio de sesión exitoso." };
+    const empleado = db.prepare("SELECT * FROM empleados WHERE id = ?").get(user.empleado_id);
+    return { success: true, message: "Inicio de sesión exitoso.", empleado };
   } catch (error) {
     console.error("❌ Error en el login:", error);
     return { success: false, message: "Ocurrió un error inesperado durante el inicio de sesión." };
@@ -1800,4 +1801,48 @@ electron.app.whenReady().then(() => {
 });
 electron.app.on("window-all-closed", () => {
   if (process.platform !== "darwin") electron.app.quit();
+});
+electron.ipcMain.handle("get-citas-por-fecha", (event, fechaISO) => {
+  const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
+  const db = new Database(dbPath);
+  const fecha = fechaISO.split("T")[0];
+  const citas = db.prepare("SELECT * FROM citas WHERE fecha = ? ORDER BY hora").all(fecha);
+  return citas;
+});
+electron.ipcMain.handle("add-cita", (event, citaData) => {
+  const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
+  const db = new Database(dbPath);
+  const citaExistente = db.prepare(
+    "SELECT id FROM citas WHERE fecha = ? AND hora = ? AND empleado_id = ?"
+  ).get(citaData.fecha, citaData.hora, citaData.empleado_id);
+  if (citaExistente) {
+    return { success: false, message: "El barbero ya tiene una cita programada a esa hora." };
+  }
+  const stmt = db.prepare(
+    "INSERT INTO citas (nombre_cliente, telefono_cliente, fecha, hora, servicio, empleado_id) VALUES (?, ?, ?, ?, ?, ?)"
+  );
+  const info = stmt.run(citaData.nombre_cliente, null, citaData.fecha, citaData.hora, citaData.servicio, citaData.empleado_id);
+  return { success: true, id: info.lastInsertRowid };
+});
+electron.ipcMain.handle("delete-cita", (event, id) => {
+  const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
+  const db = new Database(dbPath);
+  const stmt = db.prepare("DELETE FROM citas WHERE id = ?");
+  stmt.run(id);
+  return { success: true };
+});
+electron.ipcMain.handle("update-cita", (event, citaData) => {
+  const dbPath = path.join(electron.app.getPath("userData"), "barberia.db");
+  const db = new Database(dbPath);
+  const citaExistente = db.prepare(
+    "SELECT id FROM citas WHERE fecha = ? AND hora = ? AND empleado_id = ? AND id != ?"
+  ).get(citaData.fecha, citaData.hora, citaData.empleado_id, citaData.id);
+  if (citaExistente) {
+    return { success: false, message: "El barbero ya tiene otra cita programada a esa hora." };
+  }
+  const stmt = db.prepare(
+    "UPDATE citas SET nombre_cliente = ?, hora = ?, servicio = ?, fecha = ? WHERE id = ?"
+  );
+  const info = stmt.run(citaData.nombre_cliente, citaData.hora, citaData.servicio, citaData.fecha, citaData.id);
+  return { success: info.changes > 0 };
 });

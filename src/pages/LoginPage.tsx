@@ -8,17 +8,21 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null); // Estado para manejar errores
   const navigate = useNavigate();
 
+  
+// Guardar los datos del usuario en el Frontend 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError(null); // Limpia errores previos
+    setError(null);
 
     try {
       const result = await window.electronAPI.invoke('login-user', { email, password });
 
       if (result.success) {
-        navigate('/dashboard'); // Redirige si el login es exitoso
+        // Guardamos los datos del empleado en el estado de la navegación
+        // para que la siguiente página pueda acceder a ellos.
+        navigate('/dashboard', { state: { empleado: result.empleado } });
       } else {
-        setError(result.message); // Muestra el mensaje de error del backend
+        setError(result.message);
       }
     } catch (err) {
       console.error('Error al invocar IPC de login:', err);

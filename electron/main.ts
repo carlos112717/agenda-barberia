@@ -12,6 +12,13 @@ interface User {
   empleado_id: number;
 }
 
+interface Empleado {
+  id: number;
+  nombre: string;
+  apellidos: string;
+  rol: string;
+}
+
 // ---- CONFIGURACIÓN DE LA BASE DE DATOS ----
 function setupDatabase() {
   try {
@@ -52,11 +59,10 @@ function createWindow() {
 // ---- MANEJADORES DE IPC (LOGIN Y REGISTRO) ----
 
 ipcMain.handle('login-user', async (event, { email, password }) => {
+  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+  const db = new Database(dbPath);
   try {
-    const dbPath = path.join(app.getPath('userData'), 'barberia.db');
-    const db = new Database(dbPath);
     const user = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(email) as User | undefined;
-
     if (!user) {
       return { success: false, message: 'El correo electrónico no está registrado.' };
     }
@@ -65,8 +71,13 @@ ipcMain.handle('login-user', async (event, { email, password }) => {
     if (!passwordMatch) {
       return { success: false, message: 'La contraseña es incorrecta.' };
     }
+    
+    // Obtenemos los datos completos del empleado asociado
+    const empleado = db.prepare('SELECT * FROM empleados WHERE id = ?').get(user.empleado_id);
 
-    return { success: true, message: 'Inicio de sesión exitoso.' };
+    // Devolvemos los datos del empleado en la respuesta
+    return { success: true, message: 'Inicio de sesión exitoso.', empleado };
+
   } catch (error) {
     console.error('❌ Error en el login:', error);
     return { success: false, message: 'Ocurrió un error inesperado durante el inicio de sesión.' };
@@ -95,6 +106,14 @@ ipcMain.handle('register-user', async (event, userData) => {
   }
 });
 
+//Obtener la lista de todos los barberos
+ipcMain.handle('get-all-barbers', () => {
+  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+  const db = new Database(dbPath);
+  const barberos = db.prepare("SELECT id, nombre, apellidos FROM empleados WHERE rol = 'Barbero'").all();
+  return barberos;
+});
+
 
 // ---- CICLO DE VIDA DE LA APP ----
 app.whenReady().then(() => {
@@ -104,4 +123,83 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+
+//Obtener citas (distingue entre admin y barbero)
+ipcMain.handle('get-citas-por-fecha', (event, { fechaISO, empleado }) => {
+  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+  const db = new Database(dbPath);
+  const fecha = fechaISO.split('T')[0];
+  
+  let citas;
+  if (empleado.rol === 'Administrador') {
+    // Si es admin, trae las citas de todos los empleados, uniendo las tablas para obtener el nombre del barbero
+    citas = db.prepare(`
+      SELECT c.*, e.nombre as barbero_nombre, e.apellidos as barbero_apellidos
+      FROM citas c
+      JOIN empleados e ON c.empleado_id = e.id
+      WHERE c.fecha = ?
+      ORDER BY c.hora
+    `).all(fecha);
+  } else {
+    // Si es barbero, trae solo sus propias citas
+    citas = db.prepare('SELECT * FROM citas WHERE fecha = ? AND empleado_id = ? ORDER BY hora')
+              .all(fecha, empleado.id);
+  }
+  return citas;
+});
+
+// Añadir una nueva cita (con validación)
+ipcMain.handle('add-cita', (event, citaData) => {
+  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+  const db = new Database(dbPath);
+
+  // VALIDACIÓN: Comprobar si ya existe una cita para ese empleado en esa fecha y hora
+  const citaExistente = db.prepare(
+    'SELECT id FROM citas WHERE fecha = ? AND hora = ? AND empleado_id = ?'
+  ).get(citaData.fecha, citaData.hora, citaData.empleado_id);
+
+  if (citaExistente) {
+    return { success: false, message: 'El barbero ya tiene una cita programada a esa hora.' };
+  }
+
+  // Si no existe, procedemos a insertar
+  const stmt = db.prepare(
+    'INSERT INTO citas (nombre_cliente, telefono_cliente, fecha, hora, servicio, empleado_id) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  const info = stmt.run(citaData.nombre_cliente, null, citaData.fecha, citaData.hora, citaData.servicio, citaData.empleado_id);
+  return { success: true, id: info.lastInsertRowid };
+});
+
+// Eliminar una cita
+ipcMain.handle('delete-cita', (event, id) => {
+  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+  const db = new Database(dbPath);
+  const stmt = db.prepare('DELETE FROM citas WHERE id = ?');
+  stmt.run(id);
+  return { success: true };
+});
+
+
+// Actualizar una cita existente (con validación)
+ipcMain.handle('update-cita', (event, citaData) => {
+  const dbPath = path.join(app.getPath('userData'), 'barberia.db');
+  const db = new Database(dbPath);
+
+  // VALIDACIÓN: Comprobar si existe OTRA cita a la misma hora
+  const citaExistente = db.prepare(
+    'SELECT id FROM citas WHERE fecha = ? AND hora = ? AND empleado_id = ? AND id != ?'
+  ).get(citaData.fecha, citaData.hora, citaData.empleado_id, citaData.id);
+
+  if (citaExistente) {
+    return { success: false, message: 'El barbero ya tiene otra cita programada a esa hora.' };
+  }
+  
+  // Si no hay conflicto, procedemos a actualizar
+  const stmt = db.prepare(
+    'UPDATE citas SET nombre_cliente = ?, hora = ?, servicio = ?, fecha = ? WHERE id = ?'
+  );
+  const info = stmt.run(citaData.nombre_cliente, citaData.hora, citaData.servicio, citaData.fecha, citaData.id);
+  return { success: info.changes > 0 };
 });
